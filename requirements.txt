@@ -1,0 +1,13 @@
+# Runtime dependencies (pinned). Installed in the production image.
+alembic==1.20.0
+argon2-cffi==25.1.0
+fastapi==0.142.2
+itsdangerous==2.2.0
+Jinja2==3.1.6
+psycopg[binary]==3.3.6
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-multipart==0.0.32
+SQLAlchemy==2.1.1
+tzdata==2026.4
+uvicorn==0.54.0

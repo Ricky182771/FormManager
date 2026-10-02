@@ -181,13 +181,13 @@ Su objetivo es:
 El formulario podrá tener además un `slug` humano:
 
 ```text
-registro-equipos
+inscripcion-taller
 ```
 
 Ejemplo de URL:
 
 ```text
-/f/registro-equipos
+/f/inscripcion-taller
 ```
 
 ---
@@ -246,19 +246,19 @@ Ejemplo conceptual:
 schema_version = 1
 
 id = "K8mP4qT2xN7rV5sA"
-slug = "registro-equipos"
+slug = "inscripcion-taller"
 
-title = "Registro de equipos"
-subtitle = "Transhumanismo y Posthumanismo"
+title = "Inscripción a taller"
+subtitle = "Formulario de inscripción"
 
 description = """
-Selecciona a los **cuatro integrantes** de tu equipo.
+Elige **un horario** y deja tus datos de contacto.
 """
 
 status = "open"
 
 [submission]
-max_responses = 11
+max_responses = 100
 
 [access]
 mode = "code"
@@ -413,8 +413,8 @@ Los IDs de elementos deben ser:
 Ejemplo:
 
 ```toml
-id = "student_email"
-label = "Correo del estudiante"
+id = "contact_email"
+label = "Correo de contacto"
 ```
 
 Cambiar:
@@ -608,13 +608,13 @@ case = "upper"
 Esto permitiría convertir:
 
 ```text
-"  ricardo   aldana "
+"  alice   example "
 ```
 
 en:
 
 ```text
-"RICARDO ALDANA"
+"ALICE EXAMPLE"
 ```
 
 El Core NO debe realizar transformaciones agresivas no declaradas.
@@ -694,26 +694,26 @@ Ejemplo:
 
 ```toml
 [[element]]
-id = "semester"
+id = "session"
 type = "select"
-label = "Semestre"
+label = "Turno"
 required = true
 
 [[element.options]]
-value = "3"
-label = "Tercer semestre"
+value = "am"
+label = "Turno matutino"
 ```
 
 La respuesta almacenada será:
 
 ```text
-"3"
+"am"
 ```
 
 y NO:
 
 ```text
-"Tercer semestre"
+"Turno matutino"
 ```
 
 Esto permite modificar posteriormente la representación humana sin alterar el significado histórico del dato.
@@ -752,7 +752,7 @@ Las propiedades desconocidas NO deben ignorarse silenciosamente.
 Los elementos podrán referenciarlos mediante:
 
 ```toml
-resource = "students"
+resource = "rooms"
 ```
 
 Los recursos son fuentes de datos.
@@ -778,10 +778,10 @@ Ejemplo:
 
 ```toml
 [[resource]]
-id = "students"
+id = "rooms"
 type = "file"
 format = "csv"
-source = "resources/students.csv"
+source = "resources/rooms.csv"
 
 key = "id"
 label = "name"
@@ -797,11 +797,11 @@ Conceptualmente:
 
 ```json
 {
-  "id": "student_001",
-  "label": "ALDANA ORTEGA RICARDO ANTONIO",
+  "id": "room_a",
+  "label": "Sala A",
   "data": {
-    "group": "IA3A",
-    "semester": 3
+    "building": "north",
+    "capacity": 30
   }
 }
 ```
@@ -1067,10 +1067,9 @@ Ejemplo conceptual:
 {
   "type": "distinct",
   "fields": [
-    "representative",
-    "member_2",
-    "member_3",
-    "member_4"
+    "participant_a",
+    "participant_b",
+    "participant_c"
   ]
 }
 ```
@@ -1088,8 +1087,8 @@ Ejemplo:
 ```json
 {
   "type": "option_usage_limit",
-  "field": "topic",
-  "max_uses": 1
+  "field": "time_slot",
+  "max_uses": 2
 }
 ```
 
@@ -1122,8 +1121,8 @@ Ejemplo:
 ```json
 {
   "type": "option_usage_limit",
-  "field": "topic",
-  "max_uses": 1
+  "field": "time_slot",
+  "max_uses": 2
 }
 ```
 

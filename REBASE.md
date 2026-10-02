@@ -14,16 +14,13 @@ El repositorio TeamRegistration es una **referencia de implementación y segurid
 
 La migración NO debe consistir en copiar el repositorio entero y renombrar clases. Debe portarse comportamiento reusable y rediseñarse todo aquello que dependa de:
 
-- alumnos;
-- temas;
-- equipos;
-- representantes;
-- exactamente 44 alumnos;
-- exactamente 11 temas/equipos;
-- equipos de exactamente 4 integrantes;
-- el tema «Transhumanismo y Posthumanismo»;
-- nombres reales incluidos en `seed_data.py`;
+- entidades de dominio propias del prototipo (participantes, grupos, catálogo de opciones, roles fijos);
+- constantes de negocio hardcodeadas (cantidades fijas de participantes, grupos u opciones);
+- el contenido concreto de la actividad escolar original;
+- datos personales incluidos en el seed del prototipo;
 - mensajes, rutas, plantillas o modelos propios de esa actividad.
+
+El inventario concreto de esas piezas está en §2.3.
 
 El resultado debe ser un producto nuevo: **FormManager**, un motor de formularios self-hosted y headless-first.
 
@@ -94,16 +91,9 @@ Claude debe conservar ideas como:
 
 Claude NO debe conservar como arquitectura central:
 
-```text
-Student
-Topic
-Team
-TeamMember
-MAX_TEAMS
-TEAM_SIZE
-TOTAL_STUDENTS
-register_team()
-```
+- modelos de dominio legacy;
+- constantes de negocio hardcodeadas;
+- la función de registro específica del flujo legacy.
 
 Estos conceptos fueron útiles para el prototipo, pero en FormManager deben convertirse en abstracciones genéricas:
 
@@ -123,14 +113,33 @@ FormVersion
 NO renombrar simplemente:
 
 ```text
-Student -> ResourceItem
-Team -> Submission
-Topic -> Option
+<entidad legacy del prototipo>   -> ResourceItem
+<agrupación legacy del prototipo> -> Submission
+<catálogo legacy del prototipo>   -> Option
 ```
 
-si la lógica continúa asumiendo internamente cuatro integrantes, once opciones o roles de representante.
+si la lógica continúa asumiendo internamente un número fijo de participantes, un número fijo de opciones o roles fijos del flujo original.
 
-Cada pieza migrada debe ser realmente independiente del formulario escolar.
+Cada pieza migrada debe ser realmente independiente del flujo del prototipo.
+
+## 2.3 Inventario legacy (única sección con entidades y constantes concretas)
+
+Esta es la única sección que nombra las entidades, constantes y seeds concretos del dominio del prototipo, para que Claude Code pueda reconocerlas al leer TeamRegistration. El resto del documento se refiere a ellas como **dominio legacy**.
+
+No deben migrarse al Core:
+
+```text
+app/models/student.py, topic.py, team.py, team_member.py   modelos de dominio legacy
+app/models/settings.py                                      singleton global de apertura
+app/schemas/registration.py                                 schemas del flujo legacy
+app/services/registration.py                                servicio de registro legacy
+app/services/admin.py (vistas, borrado y export de grupos)  administración del flujo legacy
+app/routes/api.py, app/routes/public.py                     rutas no versionadas del flujo legacy
+app/seed.py, app/seed_data.py                               seed del prototipo (contiene datos personales)
+constantes de tamaño fijo en app/config.py                  número de grupos, tamaño de grupo, total de participantes
+```
+
+Sus invariantes de seguridad y concurrencia sí deben reaparecer en servicios genéricos (ver §6.6 y §12).
 
 ---
 
@@ -138,16 +147,16 @@ Cada pieza migrada debe ser realmente independiente del formulario escolar.
 
 El nuevo repositorio NO debe contener:
 
-- nombres reales de alumnos del proyecto original;
-- la lista oficial de 44 alumnos;
-- temas escolares reales como seed obligatorio;
+- nombres reales de personas del proyecto original;
+- listas reales de participantes;
+- contenidos reales de la actividad original como seed obligatorio;
 - backups del despliegue original;
 - respuestas reales;
 - logs reales;
 - hashes o secretos usados en Azure;
 - `.env` reales.
 
-`app/seed_data.py` del proyecto original **NO debe copiarse**.
+El seed de datos del proyecto original (§2.3) **NO debe copiarse**.
 
 Si se necesita una demo o fixture equivalente, usar exclusivamente datos ficticios, por ejemplo:
 
@@ -289,10 +298,10 @@ NO copiar literalmente el modelo actual:
 ```text
 csrf
 access_granted_at
-team_id
+<id de recibo del flujo legacy>
 ```
 
-`team_id` es específico de TeamRegistration.
+El identificador de recibo es específico de TeamRegistration.
 
 Conservar únicamente la idea de estado público firmado y CSRF. Rediseñar el estado para que sea genérico y, si hay autorización por formulario, quede correctamente vinculada a un `form_id`/versión y no permita que el acceso a un formulario conceda acceso a todos.
 
@@ -443,9 +452,9 @@ inicialización idempotente necesaria
 serve
 ```
 
-Pero reemplazar el seed escolar por inicialización genérica del Core.
+Pero reemplazar el seed del prototipo por inicialización genérica del Core.
 
-No crear alumnos/temas por defecto.
+No crear entidades del dominio legacy por defecto.
 
 ---
 
@@ -453,15 +462,9 @@ No crear alumnos/temas por defecto.
 
 ## 6.1 `app/config.py`
 
-Eliminar:
+Eliminar las constantes de tamaño fijo del flujo legacy (§2.3).
 
-```python
-MAX_TEAMS = 11
-TEAM_SIZE = 4
-TOTAL_STUDENTS = 44
-```
-
-Eliminar cualquier variable de configuración cuyo significado sea exclusivamente «registro de equipos».
+Eliminar cualquier variable de configuración cuyo significado pertenezca exclusivamente al flujo del prototipo.
 
 Mantener y generalizar:
 
@@ -486,14 +489,7 @@ El código de acceso deja de ser una propiedad global rígida del sistema. Debe 
 
 ## 6.2 Modelos de dominio
 
-NO migrar como modelos principales:
-
-```text
-app/models/student.py
-app/models/topic.py
-app/models/team.py
-app/models/team_member.py
-```
+NO migrar como modelos principales los modelos de dominio legacy (§2.3).
 
 Sus invariantes deben inspirar el modelo genérico, pero no sobrevivir como tablas obligatorias.
 
@@ -524,9 +520,9 @@ Distinguir:
 
 El estado OPEN/CLOSED deberá ser por formulario.
 
-## 6.4 `seed.py` y `seed_data.py`
+## 6.4 Seed del prototipo
 
-Eliminar toda dependencia del roster y topics escolares.
+Eliminar toda dependencia de los datasets y catálogos del prototipo.
 
 El nuevo inicializador solo debe crear datos de infraestructura verdaderamente genéricos si son necesarios.
 
@@ -534,7 +530,7 @@ Los formularios de ejemplo deben cargarse como packages dentro de `examples/` o 
 
 ## 6.5 `app/schemas/registration.py`
 
-No migrar `RegistrationIn`, `PersonOut`, `TopicOut`, etc. como API oficial.
+No migrar los schemas de entrada/salida del flujo legacy como API oficial.
 
 Reemplazarlos con schemas genéricos de:
 
@@ -556,7 +552,7 @@ Tipos estrictos deben seguir siendo la norma. No aceptar coerciones silenciosas 
 
 Este archivo contiene una de las mejores partes del prototipo, pero también el mayor acoplamiento al dominio.
 
-NO portarlo como `register_team()` renombrado.
+NO portarlo como la función de registro legacy renombrada.
 
 Extraer sus ideas:
 
@@ -591,12 +587,9 @@ Conservar:
 
 Eliminar/generalizar:
 
-- `TeamView`;
-- `list_teams()`;
-- `get_team()`;
-- `delete_team()`;
-- headers CSV fijos de integrantes/tema;
-- acciones `TEAM_DELETED`.
+- vistas, listados y borrado ligados a la entidad de agrupación legacy;
+- headers CSV fijos del flujo legacy;
+- acciones de auditoría específicas del flujo legacy.
 
 La exportación genérica debe derivar columnas de la definición/version del formulario.
 
@@ -607,10 +600,7 @@ La función `_cell()` que neutraliza formula injection de spreadsheets es valios
 Eliminar como API estable:
 
 ```text
-/api/register
-/api/students/available
-/api/topics/available
-/api/availability
+las rutas no versionadas de registro y disponibilidad del prototipo
 ```
 
 El nuevo contrato debe comenzar versionado:
@@ -632,7 +622,7 @@ No es obligatorio implementar todos durante el primer hito. Sí es obligatorio n
 
 ## 6.9 Templates y frontend
 
-No portar textos ni estructura escolar.
+No portar textos ni estructura del prototipo.
 
 La UI original puede usarse como referencia de:
 
@@ -644,7 +634,7 @@ La UI original puede usarse como referencia de:
 
 Pero el nuevo frontend builtin debe renderizar definiciones genéricas.
 
-No incrustar conocimiento de `student`, `topic`, `member_2`, etc.
+No incrustar conocimiento de los IDs de campos del formulario original.
 
 ---
 
@@ -656,7 +646,7 @@ El nuevo FormManager es un repositorio nuevo. No debe fingir que su esquema gen�
 
 Crear una nueva migración inicial coherente con FormManager.
 
-No copiar la migración de TeamRegistration y después crear una serie de migraciones destructivas para renombrar/eliminar `students`, `teams`, etc.
+No copiar la migración de TeamRegistration y después crear una serie de migraciones destructivas para renombrar/eliminar las tablas del dominio legacy.
 
 Eso solo arrastraría deuda histórica y datos personales hacia un producto nuevo.
 
@@ -880,7 +870,7 @@ No implementar Markdown antes del hito correspondiente si todavía no existe el 
 
 # 11. Resources: reglas de migración
 
-El prototipo usa `Student` y `Topic` como tablas permanentes. FormManager debe reemplazar esa idea por Resources.
+El prototipo usa tablas permanentes para su catálogo de participantes y de opciones. FormManager debe reemplazar esa idea por Resources.
 
 Un Resource es una fuente de datos que el Core transforma a un dataset canónico.
 
@@ -965,7 +955,7 @@ No debe quedar:
 
 ## 12.2 Orden determinista
 
-Cuando una operación adquiera múltiples reservas/recursos capaces de colisionar, procesarlos en orden determinista para reducir riesgo de deadlocks, de forma equivalente al orden por `student_id` del prototipo.
+Cuando una operación adquiera múltiples reservas/recursos capaces de colisionar, procesarlos en orden determinista para reducir riesgo de deadlocks, de forma equivalente al orden por clave primaria que usaba el prototipo.
 
 ---
 
@@ -1054,10 +1044,10 @@ Mantener como objetivos:
 
 No conservar:
 
-- textos escolares;
-- columnas rígidas representante/integrantes/tema;
-- contadores fijos 44/11;
-- lógica JS específica de alumnos/temas.
+- textos de la actividad original;
+- columnas rígidas por rol del flujo legacy;
+- contadores con cantidades fijas;
+- lógica JS específica del dominio legacy.
 
 Modos previstos:
 
@@ -1090,7 +1080,7 @@ Mantener inicialmente:
 Transformar el dashboard de:
 
 ```text
-estado global + equipos
+estado global + entidades del flujo legacy
 ```
 
 a:
@@ -1114,7 +1104,7 @@ No construir un editor visual complejo durante el rebase.
 
 Conservar `AdminAuditLog` o un equivalente genérico.
 
-Las acciones deben dejar de ser escolares.
+Las acciones deben dejar de ser específicas del prototipo.
 
 Ejemplos futuros:
 
@@ -1153,13 +1143,13 @@ CR
 
 Conservar soporte UTF-8 correcto.
 
-La exportación genérica debe derivar headers del schema/version del formulario, no de columnas escolares fijas.
+La exportación genérica debe derivar headers del schema/version del formulario, no de columnas fijas del prototipo.
 
 ---
 
 # 19. Tests que deben migrarse como patrones
 
-No copiar literalmente tests con nombres de alumnos. Reescribirlos con fixtures sintéticos.
+No copiar literalmente tests con nombres de personas reales. Reescribirlos con fixtures sintéticos.
 
 ## 19.1 PostgreSQL real
 
@@ -1377,7 +1367,7 @@ Si una función futura exige una interfaz, diseñar un seam limpio, pero no impl
 
 | Origen TeamRegistration | Acción | Destino / regla |
 |---|---|---|
-| `app/config.py` | REFACTOR | `Settings` genérico; borrar constantes escolares |
+| `app/config.py` | REFACTOR | `Settings` genérico; borrar constantes del prototipo |
 | `app/db/base.py` | KEEP/RENAME | conservar naming conventions |
 | `app/db/session.py` | KEEP/GENERALIZE | `application_name=formmanager` |
 | `app/logging_setup.py` | KEEP/HARDEN | ampliar sensitive keys |
@@ -1391,10 +1381,7 @@ Si una función futura exige una interfaz, diseñar un seam limpio, pero no impl
 | `app/models/admin_session.py` | KEEP | puede conservarse |
 | `app/models/audit.py` | KEEP/GENERALIZE | acciones genéricas |
 | `app/models/settings.py` | REPLACE | no singleton global `registration_open` |
-| `app/models/student.py` | DELETE | reemplazado por Resources |
-| `app/models/topic.py` | DELETE | opciones/resources genéricos |
-| `app/models/team.py` | DELETE | reemplazado por Submission |
-| `app/models/team_member.py` | DELETE | reemplazado por values/reservations |
+| modelos de dominio legacy (§2.3) | DELETE | reemplazados por Resources, opciones, Submission, values y reservations |
 | `app/schemas/registration.py` | REPLACE | schemas genéricos |
 | `app/services/registration.py` | REDESIGN | extraer transacciones/concurrencia a Submission/Reservation services |
 | `app/services/admin.py` | REFACTOR | admin genérico; conservar audit y CSV hardening |
@@ -1402,7 +1389,7 @@ Si una función futura exige una interfaz, diseñar un seam limpio, pero no impl
 | `app/routes/public.py` | REFACTOR | runtime builtin genérico |
 | `app/routes/admin.py` | REFACTOR | lista/forms/submissions/resources |
 | `app/seed.py` | REPLACE | init genérico; no datasets privados |
-| `app/seed_data.py` | DO NOT COPY | contiene datos específicos/personales |
+| seed de datos del prototipo (§2.3) | DO NOT COPY | contiene datos específicos/personales |
 | `app/templates/*` | REPLACE | UI builtin genérica |
 | `app/static/*` | REUSE SELECTIVELY | solo componentes/UX no específicos |
 | `alembic/0001...` | DO NOT COPY AS HISTORY | crear nueva `0001` de FormManager |
@@ -1423,7 +1410,7 @@ Si una función futura exige una interfaz, diseñar un seam limpio, pero no impl
 | `tests/test_unit.py` | REFACTOR | element/resource/rule validation |
 | `README.md` | REWRITE | producto FormManager |
 | `SECURITY.md` | REWRITE USING SAME THREAT DISCIPLINE | riesgos de generic/headless/resources |
-| `DEPLOY_AZURE.md` | GENERALIZE | despliegue FormManager, no una noche/clase |
+| `DEPLOY_AZURE.md` | GENERALIZE | despliegue FormManager, no un evento concreto |
 | `Makefile` | KEEP/ADAPT | mismo quality gate |
 | `pyproject.toml` | KEEP/ADAPT | nombre `formmanager`; strict quality |
 
@@ -1460,31 +1447,23 @@ form.toml
     -> título, límites, estado/acceso
 
 elements.toml
-    -> representante, integrante2, integrante3, integrante4, tema
+    -> varios campos resource_select de participante + un campo de opción
 
 resources.toml
-    -> alumnos ficticios / temas
+    -> participantes ficticios (ALICE EXAMPLE, BOB EXAMPLE, ...) / catálogo de opciones
 
 rules.json
-    -> los cuatro deben ser distintos
-    -> alumno/resource item máximo 1 uso global
-    -> tema/opción máximo 1 uso global
+    -> los campos de participante deben ser distintos entre sí
+    -> cada resource item: máximo 1 uso global
+    -> cada opción: máximo 1 uso global
     -> máximo N submissions
 ```
 
 Y el Core debe aplicar esas garantías con su modelo genérico de submissions/reservations.
 
-En ese momento deben poder eliminarse definitivamente del Core las palabras/conceptos:
+En ese momento no debe quedar en el Core ningún modelo, constante ni rol del dominio legacy (§2.3).
 
-```text
-Student
-Topic
-Team
-TeamMember
-representative como concepto del sistema
-```
-
-`representative` podrá existir únicamente como ID de un elemento definido por un formulario concreto.
+Un rol del flujo original podrá existir únicamente como ID de un elemento definido por un formulario concreto, nunca como concepto del sistema.
 
 ---
 
@@ -1519,9 +1498,9 @@ Si un hito necesita cambiar una de estas propiedades, Claude debe detenerse, exp
 
 Durante la migración queda expresamente prohibido:
 
-- copiar `seed_data.py` al nuevo repo;
+- copiar el seed de datos del prototipo al nuevo repo;
 - introducir los nombres reales en fixtures, demos o docs;
-- conservar `MAX_TEAMS=11`, `TEAM_SIZE=4` o `TOTAL_STUDENTS=44` como conceptos del Core;
+- conservar las constantes de tamaño fijo del prototipo como conceptos del Core;
 - usar SQLite para validar concurrencia crítica;
 - convertir todos los valores de submissions a strings por comodidad;
 - permitir propiedades desconocidas silenciosamente en definitions;
@@ -1553,7 +1532,7 @@ Para el primer trabajo de Claude en el repo nuevo:
 6. Introducir `FORMS_DIR`.
 7. Implementar después el Hito de Form Package/Form Loader.
 
-No empezar portando `Student`, `Topic`, `Team` ni `register_team()`.
+No empezar portando los modelos de dominio legacy ni la función de registro legacy.
 
 La primera versión arrancable del nuevo repo debe poder mostrar algo equivalente a:
 
@@ -1563,7 +1542,7 @@ FormManager Core running
 Database healthy
 ```
 
-sin requerir datos escolares para iniciar.
+sin requerir datos del prototipo para iniciar.
 
 ---
 
@@ -1582,5 +1561,5 @@ FormManager debe conservar esas fortalezas sin conservar el caso particular que 
 
 La regla de decisión durante todo el rebase es:
 
-> **Si una pieza existe porque es necesaria para cualquier motor de formularios seguro, se generaliza y se conserva. Si existe porque había 44 alumnos formando 11 equipos para elegir 11 temas, se elimina del Core y, como máximo, se convierte en un ejemplo sintético.**
+> **Si una pieza existe porque es necesaria para cualquier motor de formularios seguro, se generaliza y se conserva. Si existe solo porque el flujo concreto del prototipo tenía cantidades fijas de participantes, grupos y opciones, se elimina del Core y, como máximo, se convierte en un ejemplo sintético.**
 

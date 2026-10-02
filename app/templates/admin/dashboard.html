@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Administración · FormManager{% endblock %}
+{% block header_extra %}
+<form class="header-action" method="post" action="/admin/logout">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <button class="button button--quiet" type="submit">Cerrar sesión</button>
+</form>
+{% endblock %}
+{% block content %}
+<h1>FormManager Admin</h1>
+<dl class="status">
+  <div class="status__row">
+    <dt>Estado del Core</dt>
+    {% if db_ok %}
+    <dd>Saludable</dd>
+    {% else %}
+    <dd class="is-bad">Base de datos no disponible</dd>
+    {% endif %}
+  </div>
+  <div class="status__row">
+    <dt>Formularios cargados</dt>
+    <dd>{{ forms_loaded }}</dd>
+  </div>
+  <div class="status__row">
+    <dt>Sesión</dt>
+    <dd>{{ admin.username }}, expira {{ admin.expires_at | localtime }} ({{ timezone }})</dd>
+  </div>
+</dl>
+{% endblock %}

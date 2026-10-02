@@ -104,7 +104,7 @@ TeamRegistration es una referencia de implementación, NO la arquitectura final.
 
 Al portar código desde TeamRegistration, pregunta siempre:
 
-> ¿Esta pieza existe porque cualquier motor de formularios seguro la necesita, o porque el formulario escolar específico la necesitaba?
+> ¿Esta pieza existe porque cualquier motor de formularios seguro la necesita, o porque el flujo de negocio específico del prototipo la necesitaba?
 
 Si es genérica:
 
@@ -112,7 +112,7 @@ Si es genérica:
 - generalízala;
 - prueba que mantiene sus invariantes.
 
-Si es específica del formulario escolar:
+Si es específica del flujo del prototipo:
 
 - NO la portes al Core;
 - elimínala de la migración;
@@ -123,19 +123,17 @@ NO hagas renombres falsamente genéricos.
 Ejemplo prohibido:
 
 ```text
-Student -> ResourceItem
-Team -> Submission
-Topic -> Option
+<entidad legacy del prototipo>  -> ResourceItem
+<agrupación legacy del prototipo> -> Submission
+<catálogo legacy del prototipo>  -> Option
 ```
 
 si por debajo sigue existiendo lógica específica de:
 
-- 44 alumnos;
-- 11 equipos;
-- 4 integrantes;
-- representantes;
-- 11 temas;
-- la actividad de Transhumanismo/Posthumanismo.
+- cantidades fijas de participantes, grupos u opciones;
+- roles fijos del flujo original;
+- constantes de negocio hardcodeadas;
+- el flujo escolar específico del prototipo.
 
 ---
 
@@ -145,7 +143,7 @@ El Core de FormManager NO debe contener datos personales reales.
 
 Está prohibido copiar al nuevo repositorio:
 
-- nombres reales de alumnos;
+- nombres reales de personas;
 - listas reales de grupos;
 - respuestas reales;
 - backups reales;
@@ -155,7 +153,7 @@ Está prohibido copiar al nuevo repositorio:
 - logs de producción;
 - secretos;
 - direcciones IP históricas;
-- datos escolares identificables.
+- cualquier dato identificable del prototipo.
 
 Para tests y ejemplos usa exclusivamente datos sintéticos, por ejemplo:
 
@@ -491,20 +489,20 @@ Ejemplo:
 
 ```toml
 [[element.options]]
-value = "3"
-label = "Tercer semestre"
+value = "am"
+label = "Turno matutino"
 ```
 
 La persistencia usa:
 
 ```text
-"3"
+"am"
 ```
 
 La UI muestra:
 
 ```text
-"Tercer semestre"
+"Turno matutino"
 ```
 
 Cambiar el `label` NO debe alterar el significado histórico del dato.
@@ -640,8 +638,8 @@ Ejemplo esperado:
 ```json
 {
   "type": "option_usage_limit",
-  "field": "topic",
-  "max_uses": 1
+  "field": "time_slot",
+  "max_uses": 2
 }
 ```
 
@@ -1541,7 +1539,7 @@ Prefiere:
 {
   "error": {
     "code": "RESOURCE_ALREADY_RESERVED",
-    "field": "student",
+    "field": "room",
     "message": "..."
   }
 }

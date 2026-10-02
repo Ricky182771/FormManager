@@ -1,0 +1,30 @@
+{
+	# Certificates are obtained and renewed automatically (Let's Encrypt / ZeroSSL).
+	admin off
+}
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	request_body {
+		max_size 64KB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=15552000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+		-Server
+		-Via
+	}
+
+	# Caddy replaces any client-supplied X-Forwarded-For with the real peer address.
+	reverse_proxy app:8000 {
+		lb_try_duration 10s
+	}
+
+	log {
+		output discard
+	}
+}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>FormManager</h1>
+<dl class="status">
+  <div class="status__row">
+    <dt>Core</dt>
+    <dd>En ejecución</dd>
+  </div>
+  <div class="status__row">
+    <dt>Base de datos</dt>
+    {% if db_ok %}
+    <dd>Saludable</dd>
+    {% else %}
+    <dd class="is-bad">No disponible</dd>
+    {% endif %}
+  </div>
+  <div class="status__row">
+    <dt>Formularios cargados</dt>
+    <dd>{{ forms_loaded }}</dd>
+  </div>
+</dl>
+{% if forms_loaded == 0 %}
+<p class="note">Todavía no hay formularios. El cargador de formularios aún no está implementado.</p>
+{% endif %}
+<p><a href="/admin">Administración</a></p>
+{% endblock %}

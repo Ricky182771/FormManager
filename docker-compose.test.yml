@@ -1,0 +1,24 @@
+# Throwaway PostgreSQL for the test suite only. Bound to localhost, data in tmpfs.
+# The same init script as production creates the least-privilege role the tests connect as.
+name: formmanager-test
+
+services:
+  testdb:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_DB: formmanager_test
+      POSTGRES_USER: test_bootstrap
+      POSTGRES_PASSWORD: test_bootstrap
+      APP_DB_USER: formmanager_test_app
+      APP_DB_PASSWORD: test_app
+    ports:
+      - "127.0.0.1:55433:5432"
+    volumes:
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro,z
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_bootstrap -d formmanager_test -h 127.0.0.1"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
