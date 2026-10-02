@@ -1,4 +1,5 @@
-"""The form package contract implemented in Hito 1: identifiers, form.toml schema, FormPackage."""
+"""The form package contract: identifiers, form.toml schema, FormPackage (elements.toml lives in
+app.forms.elements)."""
 
 from __future__ import annotations
 
@@ -9,6 +10,8 @@ from pathlib import Path
 from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, field_validator
+
+from app.forms.elements import ElementsSchema
 
 SCHEMA_VERSION = 1
 
@@ -114,7 +117,8 @@ class FormDocument(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class FormPackage:
-    """A structurally valid package. Elements, resources and rules are not interpreted yet."""
+    """A valid package: form.toml and elements.toml are interpreted; resources and rules are not
+    interpreted yet."""
 
     id: str
     slug: str
@@ -126,9 +130,12 @@ class FormPackage:
     # Relative to FORMS_DIR; the only path that may leave the process (logs, registry).
     relative_path: str
     package_path: Path
+    elements: ElementsSchema
 
     @classmethod
-    def from_document(cls, doc: FormDocument, forms_dir: Path) -> FormPackage:
+    def from_document(
+        cls, doc: FormDocument, forms_dir: Path, elements: ElementsSchema
+    ) -> FormPackage:
         return cls(
             id=doc.id,
             slug=doc.slug,
@@ -139,4 +146,5 @@ class FormPackage:
             schema_version=doc.schema_version,
             relative_path=doc.id,
             package_path=forms_dir / doc.id,
+            elements=elements,
         )

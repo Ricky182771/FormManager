@@ -19,12 +19,21 @@ from sqlalchemy.orm import Session, sessionmaker
 from alembic import command
 from app.config import Settings
 from app.forms.catalog import FormCatalog
+from app.forms.diagnostics import DiagnosticCode
 from app.forms.loader import scan_forms_dir
 from app.forms.package import FormPackage
 from app.forms.registry import sync_registry
 from app.main import create_app
 from tests.conftest import TEST_DATABASE_URL, UNREACHABLE_DATABASE_URL, alembic_config
-from tests.forms_fixtures import FORM_A, FORM_B, FORM_C, form_toml, write_package
+from tests.forms_fixtures import (
+    FORM_A,
+    FORM_B,
+    FORM_C,
+    element_toml,
+    elements_toml,
+    form_toml,
+    write_package,
+)
 
 MAX = 64 * 1024
 
@@ -189,6 +198,20 @@ def test_invalid_form_is_removed_and_never_inserted(
     (package / "rules.json").write_text("[]")
     catalog.reload()
     assert rows(engine) == []
+
+
+def test_form_with_invalid_elements_is_excluded_from_registry(
+    engine: Engine, catalog: FormCatalog, forms_root: Path
+) -> None:
+    write_package(forms_root, FORM_A, "room-booking", elements=elements_toml(element_toml()))
+    package = write_package(forms_root, FORM_B, "contact")
+    catalog.reload()
+    assert [r["id"] for r in rows(engine)] == [FORM_A, FORM_B]
+    (package / "elements.toml").write_text(elements_toml(element_toml("a"), element_toml("a")))
+    snapshot = catalog.reload()
+    assert [r["id"] for r in rows(engine)] == [FORM_A]
+    assert [f.id for f in snapshot.forms] == [FORM_A]
+    assert {d.code for d in snapshot.diagnostics} == {DiagnosticCode.DUPLICATE_ELEMENT_ID}
 
 
 def test_duplicate_slugs_on_disk_register_neither(

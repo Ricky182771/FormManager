@@ -1,6 +1,6 @@
-# FormManager: arquitectura (Hito 1)
+# FormManager: arquitectura (Hito 2)
 
-Este documento describe **lo que existe** tras el Hito 1. Los principios y el diseño futuro están en `PROJECT_RULES.md` y `REBASE.md`; aquí no se repiten. El contrato de `form.toml` está en [`FORM_SCHEMA.md`](FORM_SCHEMA.md).
+Este documento describe **lo que existe** tras el Hito 2. Los principios y el diseño futuro están en `PROJECT_RULES.md` y `REBASE.md`; aquí no se repiten. El contrato de `form.toml` está en [`FORM_SCHEMA.md`](FORM_SCHEMA.md) y el de `elements.toml` en [`ELEMENTS_SCHEMA.md`](ELEMENTS_SCHEMA.md).
 
 ## Despliegue
 
@@ -38,6 +38,8 @@ app/
 ├── forms/
 │   ├── package.py     regex de ID/slug, new_form_id(), FormDocument (form.toml), FormPackage
 │   ├── diagnostics.py DiagnosticCode, Diagnostic, safe_name()
+│   ├── elements.py    ElementsSchema y modelos inmutables de elementos; parser manual de elements.toml
+│   ├── answers.py     validate_answers(): validación local y pura de un payload de respuestas
 │   ├── fsutil.py      primitivas de filesystem seguras (dir_fd + O_NOFOLLOW); únicas en usar os.open
 │   ├── loader.py      discovery, validación estructural, resolución de duplicados
 │   ├── catalog.py     CatalogSnapshot inmutable + FormCatalog.reload()
@@ -74,14 +76,23 @@ uvicorn --workers 1 --proxy-headers
 2. Se abre con `openat(O_DIRECTORY|O_NOFOLLOW)` relativo al padre.
 3. `resources/`, `assets/` y `ui/`: si existen, directorios reales (sin symlink). No se leen.
 4. Cada archivo de definición: `lstat` sin seguir symlinks → archivo regular → tamaño ≤ límite → `openat(O_NOFOLLOW|O_NONBLOCK)` → `fstat` confirma el mismo inode → lectura acotada a límite+1 bytes → UTF-8 → `tomllib`/`json`.
-5. `form.toml` con `FormDocument` (pydantic, `extra="forbid"`, strict); los otros tres, `schema_version == 1`.
+5. `form.toml` con `FormDocument` (pydantic, `extra="forbid"`, strict); los otros tres, `schema_version == 1`; además `elements.toml` con `parse_elements` (parser manual, ver abajo).
 6. `form.toml.id` debe coincidir con el nombre del directorio.
 
-Se recogen todos los diagnósticos del paquete (máximo 20 por archivo para `form.toml`). Cada archivo se lee una sola vez por carga; el contenido de elements/resources/rules se descarta tras comprobarlo.
+Se recogen todos los diagnósticos del paquete (máximo 20 por archivo). Cada archivo se lee una sola vez por carga; el `ElementsSchema` resultante pasa a `FormPackage.elements` y el contenido de resources/rules se descarta tras comprobarlo.
 
 **Duplicados.** Índices por `id` y por `slug` (O(N)). Todos los participantes de una colisión quedan inválidos (`DUPLICATE_SLUG` / `DUPLICATE_FORM_ID`).
 
 **Plataforma.** Las primitivas de `app/forms/fsutil.py` requieren Linux/POSIX (`dir_fd`, `O_NOFOLLOW`, `O_DIRECTORY`, `renameat`). Es la plataforma soportada del runtime v1 (imagen Docker). No hay capa de compatibilidad con Windows.
+
+## Elements Schema y validación de respuestas
+
+Contrato completo: [`ELEMENTS_SCHEMA.md`](ELEMENTS_SCHEMA.md).
+
+- **Modelo.** Dataclasses `frozen`/`slots`, una por familia de tipo (`TextElement` para `text`/`text_long`, `IntegerElement`, `DecimalElement`, `BooleanElement`, `EmailElement`, `UrlElement`, `DateElement`, `TimeElement`, `DateTimeElement`, `SelectElement`, `MultiSelectElement`), unidas en el tipo `Element`. `ElementsSchema` guarda la tupla en orden de declaración y un `by_id` de solo lectura.
+- **Parser.** Manual y explícito (no pydantic): cada `[[element]]` se contrasta con una lista blanca de propiedades por tipo, lo que distingue una propiedad desconocida de una que no aplica al tipo. Informa de todos los problemas de cada elemento.
+- **`validate_answers(schema, payload)`.** Componente separado del loader, puro: no persiste, no consulta PostgreSQL, Resources ni Rules. Devuelve `ValidationResult(valid, values, errors)` con valores canónicos tipados o errores estructurados (como mucho uno por elemento, 20 en total). No tiene consumidor HTTP todavía.
+- Nada de esto está en la API ni en PostgreSQL: los elementos viven en filesystem → parser → memoria. No hay migración nueva.
 
 ## Catálogo
 
@@ -170,15 +181,17 @@ Plantillas Jinja2 sin JavaScript, borrador sin dirección visual (ENERGY 1 / RHY
 
 ## Preparado para el Hito 2
 
-- `FormPackage` + `load_package` son el punto donde se añadirá la validación semántica de `elements.toml` (y después resources/rules), con los mismos diagnósticos.
-- `CatalogSnapshot` puede llevar más datos derivados por paquete sin cambiar el modelo de recarga.
+- `FormPackage.elements` + `validate_answers` son la base de la futura API de definición y de submissions: el endpoint solo tendrá que parsear JSON (con `parse_float` estricto) y llamar al validador.
+- `load_package` es el punto donde se añadirá la validación semántica de resources/rules, con los mismos diagnósticos.
 - `get_by_slug` queda listo para `/f/{slug}` y para endpoints de definición.
 
 ## Diferido
 
 | Pieza | Hito |
 |---|---|
-| Semántica de `elements.toml` (tipos, restricciones, normalización) | Hito 2 |
+| `resource_select` / `resource_multi_select` (hoy `UNSUPPORTED_ELEMENT_TYPE`) | Hito de Resources |
+| `pattern` en elementos (diferido por riesgo de ReDoS) | Hito propio |
+| Exposición de elementos por API, serialización JSON de valores canónicos | Hito de API de definición / submissions |
 | Resources, Rules Engine, Submissions, reservations, FormVersion | Posteriores |
 | Política de visibilidad por `status`, acceso por formulario | Hito de publicación/acceso |
 | Markdown renderizado | Hito de Markdown |

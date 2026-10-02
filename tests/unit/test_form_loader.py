@@ -9,9 +9,18 @@ from pathlib import Path
 import pytest
 
 from app.forms.diagnostics import DiagnosticCode
+from app.forms.elements import ElementsSchema
 from app.forms.loader import ScanResult, resolve_conflicts, scan_forms_dir
 from app.forms.package import FormPackage
-from tests.forms_fixtures import FORM_A, FORM_B, FORM_C, form_toml, write_package
+from tests.forms_fixtures import (
+    FORM_A,
+    FORM_B,
+    FORM_C,
+    element_toml,
+    elements_toml,
+    form_toml,
+    write_package,
+)
 
 MAX = 4096
 
@@ -194,15 +203,25 @@ def test_rules_schema_version(tmp_path: Path, version: str) -> None:
     assert codes(scan(tmp_path)) == {DiagnosticCode.UNSUPPORTED_SCHEMA_VERSION}
 
 
-def test_future_keys_in_deferred_files_are_not_interpreted(tmp_path: Path) -> None:
+def test_future_keys_in_rules_are_not_interpreted(tmp_path: Path) -> None:
     package = write_package(tmp_path, FORM_A, "room-booking")
-    (package / "elements.toml").write_text(
-        'schema_version = 1\n[[element]]\nid = "email"\ntype = "anything-for-now"\n'
-    )
     (package / "rules.json").write_text(
         json.dumps({"schema_version": 1, "rules": [{"type": "not-yet-defined"}]})
     )
+    (package / "resources.toml").write_text('schema_version = 1\n[[resource]]\nid = "rooms"\n')
     assert len(scan(tmp_path).forms) == 1
+
+
+def test_elements_are_interpreted_since_hito_2(tmp_path: Path) -> None:
+    # Hito 1 accepted any [[element]]; Hito 2 gives elements.toml a strict schema.
+    package = write_package(tmp_path, FORM_A, "room-booking")
+    (package / "elements.toml").write_text(
+        'schema_version = 1\n[[element]]\nid = "email"\ntype = "anything-for-now"\n'
+        'label = "Correo"\nrequired = true\n'
+    )
+    result = scan(tmp_path)
+    assert result.forms == ()
+    assert codes(result) == {DiagnosticCode.UNKNOWN_ELEMENT_TYPE}
 
 
 def test_form_toml_diagnostic_codes(tmp_path: Path) -> None:
@@ -302,6 +321,7 @@ def _package(form_id: str, slug: str, rel: str) -> FormPackage:
         schema_version=1,
         relative_path=rel,
         package_path=Path("/unused") / rel,
+        elements=ElementsSchema(),
     )
 
 
@@ -324,3 +344,41 @@ def test_invalid_package_does_not_block_valid_one(tmp_path: Path) -> None:
     assert [f.id for f in result.forms] == [FORM_A]
     assert only_codes_for(result, FORM_B) == {DiagnosticCode.INVALID_TOML}
     assert result.packages_seen == 2
+
+
+def test_valid_elements_are_part_of_the_package(tmp_path: Path) -> None:
+    elements = elements_toml(element_toml("contact_email", "email"), element_toml("age", "integer"))
+    write_package(tmp_path, FORM_A, "room-booking", elements=elements)
+    [form] = scan(tmp_path).forms
+    assert [e.id for e in form.elements.elements] == ["contact_email", "age"]
+    assert set(form.elements.by_id) == {"contact_email", "age"}
+
+
+def test_semantically_invalid_elements_invalidate_only_their_package(tmp_path: Path) -> None:
+    write_package(tmp_path, FORM_A, "room-booking", elements=elements_toml(element_toml()))
+    write_package(
+        tmp_path,
+        FORM_B,
+        "broken",
+        elements=elements_toml(element_toml("x", extra='banana = "yes"\n')),
+    )
+    result = scan(tmp_path)
+    assert [f.id for f in result.forms] == [FORM_A]
+    assert [(d.relative_path, d.file, d.code) for d in result.diagnostics] == [
+        (FORM_B, "elements.toml", DiagnosticCode.UNKNOWN_ELEMENT_PROPERTY)
+    ]
+    assert result.packages_seen == 2
+
+
+def test_elements_and_form_diagnostics_are_reported_together(tmp_path: Path) -> None:
+    write_package(
+        tmp_path,
+        FORM_A,
+        "room-booking",
+        form=form_toml(FORM_A, "room-booking", banana="x"),
+        elements=elements_toml(element_toml(element_type="radio")),
+    )
+    assert codes(scan(tmp_path)) == {
+        DiagnosticCode.UNKNOWN_FORM_PROPERTY,
+        DiagnosticCode.UNKNOWN_ELEMENT_TYPE,
+    }

@@ -9,6 +9,7 @@ import pytest
 from app.forms import creator, fsutil
 from app.forms.creator import FormCreationError, create_form_package
 from app.forms.diagnostics import Diagnostic, DiagnosticCode
+from app.forms.elements import ElementsSchema
 from app.forms.loader import PackageResult, scan_forms_dir
 from app.forms.package import is_valid_form_id
 from tests.forms_fixtures import FORM_A, write_package
@@ -34,6 +35,8 @@ def test_creates_a_package_the_loader_accepts(tmp_path: Path) -> None:
     [loaded] = scan_forms_dir(tmp_path, MAX).forms
     assert loaded == package
     assert loaded.description == "Elige **un horario**.\n\n- mañana\n- tarde"
+    # The skeleton declares no elements, which is a valid (draft) schema since Hito 2.
+    assert loaded.elements == ElementsSchema()
     assert leftovers(tmp_path) == []
 
 

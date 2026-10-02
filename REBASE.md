@@ -761,11 +761,19 @@ Pipeline deseado:
 ```text
 input
   ↓
-syntax/type validation
+structural type validation
   ↓
-local element constraints
+mandatory structural canonicalization of the type
   ↓
-explicit normalization
+allowed-character validation
+  ↓
+explicit (declared) normalization
+  ↓
+final Unicode canonicalization (NFC, text/text_long)
+  ↓
+absence/blank and `required`
+  ↓
+local element constraints on the FINAL canonical value
   ↓
 resource validation
   ↓
@@ -775,6 +783,8 @@ transaction
   ↓
 PostgreSQL
 ```
+
+Las restricciones locales nunca se evalúan antes de una transformación que pueda cambiar el valor. Contrato exacto: `ELEMENTS_SCHEMA.md`.
 
 ## 9.1 Tipos v1 previstos
 
@@ -799,6 +809,8 @@ Estos son tipos de datos, no widgets de UI.
 
 No crear tipos Core llamados `checkbox`, `radio`, `dropdown` o `toggle` solo por su representación visual.
 
+`resource_select` y `resource_multi_select` están reconocidos pero no son utilizables hasta que exista el subsistema Resources (`UNSUPPORTED_ELEMENT_TYPE`).
+
 ## 9.2 Restricciones locales
 
 Pueden vivir en `elements.toml`:
@@ -809,10 +821,12 @@ min
 max
 min_length
 max_length
-pattern
+pattern        # DIFERIDO
 min_selected
 max_selected
 ```
+
+`pattern` está diferido por seguridad (sin garantía contra ReDoS con `re`) y no forma parte de Elements v1. `required` es obligatorio y booleano explícito en cada elemento; `null` nunca equivale a ausencia.
 
 ## 9.3 No coerción mágica
 
@@ -835,6 +849,8 @@ trim = true
 collapse_whitespace = true
 case = "upper"
 ```
+
+Orden fijo: `trim` → `collapse_whitespace` → `case`. La canonicalización estructural del tipo (NFC en texto, CRLF → LF, UTC, decimales) no es configurable y está en `ELEMENTS_SCHEMA.md`.
 
 ## 9.5 Valores de opciones
 

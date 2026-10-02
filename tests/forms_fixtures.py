@@ -29,13 +29,14 @@ def write_package(
     *,
     title: str = "Reserva de sala",
     form: str | None = None,
+    elements: str = "schema_version = 1\n",
     skip: tuple[str, ...] = (),
 ) -> Path:
     package = root / form_id
     package.mkdir()
     files = {
         "form.toml": form if form is not None else form_toml(form_id, slug, title),
-        "elements.toml": "schema_version = 1\n",
+        "elements.toml": elements,
         "resources.toml": "schema_version = 1\n",
         "rules.json": json.dumps({"schema_version": 1, "rules": []}),
     }
@@ -43,3 +44,23 @@ def write_package(
         if name not in skip:
             (package / name).write_text(content, encoding="utf-8")
     return package
+
+
+def element_toml(
+    element_id: str = "field",
+    element_type: str = "text",
+    *,
+    required: bool = True,
+    extra: str = "",
+    label: str = "Campo",
+) -> str:
+    """One [[element]] table. `extra` goes last, so it may open sub-tables like normalize."""
+    return (
+        f'[[element]]\nid = "{element_id}"\ntype = "{element_type}"\n'
+        f"label = {json.dumps(label, ensure_ascii=False)}\nrequired = {str(required).lower()}\n"
+        f"{extra}"
+    )
+
+
+def elements_toml(*elements: str) -> str:
+    return "schema_version = 1\n" + "\n".join(elements)

@@ -1,8 +1,8 @@
-# FormManager — Hito 1 / Form Package + Form Loader
+# FormManager — Hito 2 / Elements Schema
 
 Self-hosted, headless form engine with strict validation, reusable data resources, transactional rules, and customizable frontends.
 
-> **Estado: Hito 1.** FormManager sabe qué formularios existen en `FORMS_DIR` y si sus paquetes son estructuralmente válidos. **Todavía no sabe ejecutar un formulario**: no hay elementos, recursos, reglas ni submissions.
+> **Estado: Hito 2.** FormManager sabe qué formularios existen en `FORMS_DIR` y qué datos puede aceptar cada uno (`elements.toml`), y puede validar un payload de respuestas en memoria. **Todavía no recibe ni guarda respuestas**: no hay API de submissions, recursos ni reglas.
 
 Al arrancar, FormManager muestra:
 
@@ -20,7 +20,8 @@ Formularios cargados: N
 - Contraseñas Argon2id, sesiones admin server-side (la DB guarda solo HMAC-SHA256 del token), CSRF, rate limiting del login, cabeceras de seguridad, CSP estricta, límite de tamaño de petición y logs JSON sin secretos.
 - Auditoría genérica: `ADMIN_LOGIN`, `ADMIN_LOGIN_FAILED`, `ADMIN_LOGOUT`.
 - PostgreSQL 16 con rol de aplicación de mínimo privilegio y migración Alembic `0001_initial_formmanager` (solo `admin_sessions` y `admin_audit_log`).
-- `FORMS_DIR` (`/data/forms` en el contenedor): cada subdirectorio es un **paquete de formulario** (`form.toml`, `elements.toml`, `resources.toml`, `rules.json`). Se escanea al arrancar; `form.toml` se valida con un schema estricto y los otros tres solo sintácticamente. Contrato: [`FORM_SCHEMA.md`](FORM_SCHEMA.md).
+- `FORMS_DIR` (`/data/forms` en el contenedor): cada subdirectorio es un **paquete de formulario** (`form.toml`, `elements.toml`, `resources.toml`, `rules.json`). Se escanea al arrancar; `form.toml` y `elements.toml` se validan con schemas estrictos y los otros dos solo sintácticamente. Contratos: [`FORM_SCHEMA.md`](FORM_SCHEMA.md), [`ELEMENTS_SCHEMA.md`](ELEMENTS_SCHEMA.md).
+- `elements.toml`: tipos de datos semánticos (`text`, `text_long`, `integer`, `decimal`, `boolean`, `email`, `url`, `date`, `time`, `datetime`, `select`, `multi_select`), `required` explícito, restricciones locales y normalización declarada con orden fijo. Un validador interno y puro (`app.forms.answers.validate_answers`) devuelve valores canónicos tipados o errores estructurados sin repetir el input. **No está expuesto por API.**
 - Paquetes inválidos (TOML/JSON roto, symlinks, archivos enormes, ID o slug duplicado...) se rechazan con un diagnóstico en el log sin impedir el arranque ni afectar a los demás.
 - Migración `0002_forms_registry`: índice mínimo de los formularios válidos cargados, sincronizado en una transacción al arrancar.
 - API de solo lectura: `GET /api/v1/forms` (ordenados por slug) y `GET /api/v1/forms/{slug}` (metadata; `404 FORM_NOT_FOUND`). La lista incluye formularios en cualquier estado, `draft` incluido: **no** es la política de visibilidad final.
@@ -31,7 +32,9 @@ Formularios cargados: N
 
 | Pieza | Estado |
 |---|---|
-| `elements.toml` / validación de elementos | Not implemented yet (Hito 2). Hoy solo sintaxis + `schema_version`. |
+| `resource_select` / `resource_multi_select` | Not implemented yet (reconocidos, rechazados hasta el hito de Resources) |
+| `pattern` en elementos | Deferred (riesgo de ReDoS) |
+| Elementos o validación de respuestas por API | Not implemented yet |
 | `resources.toml` / Resource Manager | Not implemented yet |
 | `rules.json` / Rules Engine | Not implemented yet |
 | Submissions genéricas / reservations | Not implemented yet |
@@ -130,6 +133,7 @@ docker run --rm -v formmanager_forms_data:/data/forms:ro -v "$PWD/backups":/out 
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): componentes y fronteras.
 - [`FORM_SCHEMA.md`](FORM_SCHEMA.md): paquete de formulario y `form.toml`.
+- [`ELEMENTS_SCHEMA.md`](ELEMENTS_SCHEMA.md): `elements.toml`, tipos, normalización y validación de respuestas.
 - [`SECURITY.md`](SECURITY.md): modelo de amenazas y controles.
 - [`PROJECT_RULES.md`](PROJECT_RULES.md), [`REBASE.md`](REBASE.md), [`CLAUDE.md`](CLAUDE.md): reglas normativas.
 

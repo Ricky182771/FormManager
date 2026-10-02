@@ -456,13 +456,19 @@ La filosofía será:
 ```text
 Input
   ↓
-Validación sintáctica
+Validación del tipo estructural de entrada
   ↓
-Validación de tipo
+Canonicalización estructural obligatoria del tipo
   ↓
-Restricciones locales
+Validación de caracteres estructuralmente permitidos
   ↓
-Normalización explícita
+Normalización explícita configurada
+  ↓
+Canonicalización Unicode final (NFC, solo text/text_long)
+  ↓
+Ausencia/vacío y `required`
+  ↓
+Restricciones locales sobre el VALOR CANÓNICO FINAL
   ↓
 Rules Engine
   ↓
@@ -470,6 +476,8 @@ Transacción
   ↓
 PostgreSQL
 ```
+
+Las restricciones locales (longitud, rango...) nunca se evalúan antes de una transformación que pueda cambiar el valor: `case = "upper"` puede alargar un texto, así que `max_length` se comprueba después. El detalle exacto está en `ELEMENTS_SCHEMA.md`.
 
 ---
 
@@ -509,6 +517,8 @@ dropdown
 
 son decisiones de presentación.
 
+`resource_select` y `resource_multi_select` están reconocidos pero **no son utilizables** hasta que exista el subsistema Resources: un `elements.toml` que los use es inválido (`UNSUPPORTED_ELEMENT_TYPE`). Sus propiedades no están definidas todavía.
+
 Un frontend podrá representar:
 
 ```toml
@@ -537,10 +547,14 @@ min
 max
 min_length
 max_length
-pattern
+pattern        # DIFERIDO
 min_selected
 max_selected
 ```
+
+`pattern` está **diferido por seguridad** y no forma parte del contrato implementado de Elements v1: el módulo `re` de Python no ofrece una garantía satisfactoria contra ReDoS. Se diseñará en un hito propio; hasta entonces declararlo es un error.
+
+`required` es **obligatorio** en cada elemento y es un booleano explícito: no tiene valor por defecto. Un campo ausente y un `null` no son equivalentes: `null` es siempre un tipo inválido, y la ausencia de respuesta se representa omitiendo la clave. Ver `ELEMENTS_SCHEMA.md`.
 
 Ejemplo:
 
@@ -618,6 +632,10 @@ en:
 ```
 
 El Core NO debe realizar transformaciones agresivas no declaradas.
+
+Las normalizaciones declaradas se aplican siempre en el orden fijo `trim` → `collapse_whitespace` → `case`, sea cual sea su orden en el archivo.
+
+Distinta de la normalización declarada es la **canonicalización estructural** del tipo, que no es configurable y forma parte de su contrato: Unicode NFC en las respuestas `text`/`text_long` (para que `é` precompuesto y `e` + acento combinado no se almacenen distinto), CRLF/CR → LF en `text_long`, `HH:MM` → `HH:MM:SS`, datetime → UTC y decimal con exactamente `decimal_places` decimales. Ver `ELEMENTS_SCHEMA.md`.
 
 ---
 

@@ -18,9 +18,11 @@ from pydantic import ValidationError
 
 from app.forms import fsutil
 from app.forms.diagnostics import Diagnostic, DiagnosticCode, safe_name
+from app.forms.elements import ElementsSchema, parse_elements
 from app.forms.fsutil import EntryKind, FsRejected
 from app.forms.package import (
     DEFINITION_FILES,
+    ELEMENTS_FILE,
     FORM_FILE,
     OPTIONAL_DIRS,
     RULES_FILE,
@@ -161,6 +163,7 @@ def load_package(parent_fd: int, name: str, *, forms_dir: Path, max_bytes: int) 
 
     diagnostics: list[Diagnostic] = []
     document: FormDocument | None = None
+    elements: ElementsSchema | None = None
     try:
         with fsutil.open_subdir(parent_fd, name) as pkg_fd:
             diagnostics.extend(_check_optional_dirs(pkg_fd, rel))
@@ -175,7 +178,12 @@ def load_package(parent_fd: int, name: str, *, forms_dir: Path, max_bytes: int) 
                     document, problems = _validate_form(parsed)
                 else:
                     problems = _check_schema_version(parsed)
-                diagnostics.extend(Diagnostic(rel, file, code, msg) for code, msg in problems)
+                    if file == ELEMENTS_FILE and not problems:
+                        elements, problems = parse_elements(parsed)
+                diagnostics.extend(
+                    Diagnostic(rel, file, code, msg)
+                    for code, msg in problems[:MAX_DIAGNOSTICS_PER_FILE]
+                )
     except FsRejected as exc:
         code, message = {
             fsutil.SYMLINK: (DiagnosticCode.SYMLINK_NOT_ALLOWED, _MSG_SYMLINK_DIR),
@@ -192,9 +200,9 @@ def load_package(parent_fd: int, name: str, *, forms_dir: Path, max_bytes: int) 
                 "El id de form.toml no coincide con el nombre del directorio.",
             )
         )
-    if diagnostics or document is None:
+    if diagnostics or document is None or elements is None:
         return PackageResult(None, tuple(diagnostics))
-    return PackageResult(FormPackage.from_document(document, forms_dir), ())
+    return PackageResult(FormPackage.from_document(document, forms_dir, elements), ())
 
 
 def _check_optional_dirs(pkg_fd: int, rel: str) -> list[Diagnostic]:
@@ -302,7 +310,7 @@ def _validate_form(
         return FormDocument.model_validate(document), []
     except ValidationError as exc:
         problems: list[tuple[DiagnosticCode, str]] = []
-        for error in exc.errors(include_input=False, include_url=False)[:MAX_DIAGNOSTICS_PER_FILE]:
+        for error in exc.errors(include_input=False, include_url=False):
             field = str(error["loc"][0]) if error["loc"] else ""
             if error["type"] == "extra_forbidden":
                 problems.append(

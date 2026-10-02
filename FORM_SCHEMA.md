@@ -1,6 +1,6 @@
 # Form package y `form.toml` (schema_version 1)
 
-Este documento describe **solo el contrato implementado en el Hito 1**. Lo que no aparece aquí no existe todavía.
+Este documento describe el paquete y `form.toml` (Hito 1). El contrato de `elements.toml` (Hito 2) está en [`ELEMENTS_SCHEMA.md`](ELEMENTS_SCHEMA.md). Lo que no aparece en ninguno de los dos no existe todavía.
 
 ## Paquete
 
@@ -8,7 +8,7 @@ Este documento describe **solo el contrato implementado en el Hito 1**. Lo que n
 FORMS_DIR/
 └── <form-id>/            nombre del directorio = id de form.toml
     ├── form.toml         obligatorio, validado semánticamente (abajo)
-    ├── elements.toml     obligatorio, solo validación sintáctica
+    ├── elements.toml     obligatorio, validado semánticamente (ELEMENTS_SCHEMA.md)
     ├── resources.toml    obligatorio, solo validación sintáctica
     ├── rules.json        obligatorio, solo validación sintáctica
     ├── resources/        opcional, no se lee
@@ -52,12 +52,16 @@ status = "draft"
 - `title`, `subtitle` y `description` se conservan como texto fuente. **No se renderiza Markdown** ni se produce HTML en este hito.
 - `status` solo se valida, se registra y se expone. **No controla todavía ningún comportamiento ni la visibilidad pública** (ver "Visibilidad" abajo).
 
-## `elements.toml`, `resources.toml`, `rules.json`
+## `elements.toml`
+
+Se valida con su schema estricto: ver [`ELEMENTS_SCHEMA.md`](ELEMENTS_SCHEMA.md). Si es inválido, el paquete completo es inválido. Un `elements.toml` con solo `schema_version = 1` (cero elementos) es válido.
+
+## `resources.toml`, `rules.json`
 
 Hoy solo se comprueba que existen, son archivos regulares sin symlink, respetan el límite de tamaño, se parsean y declaran `schema_version = 1`:
 
 ```toml
-# elements.toml y resources.toml
+# resources.toml
 schema_version = 1
 ```
 
@@ -66,7 +70,7 @@ schema_version = 1
 ```
 
 - `rules.json` debe tener un objeto como raíz. Se rechazan claves duplicadas y `NaN`/`Infinity`.
-- El resto del contenido (`[[element]]`, `[[resource]]`, `rules`...) **no se interpreta todavía** y no se valida. Su semántica pertenece a hitos posteriores.
+- El resto de su contenido (`[[resource]]`, `rules`...) **no se interpreta todavía** y no se valida. Su semántica pertenece a hitos posteriores.
 
 ## Duplicados
 
@@ -76,7 +80,7 @@ Si dos paquetes declaran el mismo `slug` (o el mismo `id`), **todos** los partic
 
 Un paquete inválido no impide arrancar ni afecta a los demás. Cada problema produce un diagnóstico interno `{relative_path, file, code, message}` que se registra en el log (`form_load_failed`). No se expone por API.
 
-Códigos: `INVALID_DIRECTORY_NAME`, `SYMLINK_NOT_ALLOWED`, `MISSING_FILE`, `NOT_A_REGULAR_FILE`, `NOT_A_DIRECTORY`, `FILE_TOO_LARGE`, `UNREADABLE_FILE`, `INVALID_ENCODING`, `INVALID_TOML`, `INVALID_JSON`, `INVALID_JSON_ROOT`, `UNSUPPORTED_SCHEMA_VERSION`, `MISSING_PROPERTY`, `UNKNOWN_FORM_PROPERTY`, `INVALID_PROPERTY`, `INVALID_FORM_ID`, `INVALID_SLUG`, `INVALID_STATUS`, `FORM_ID_MISMATCH`, `DUPLICATE_FORM_ID`, `DUPLICATE_SLUG`.
+Códigos: `INVALID_DIRECTORY_NAME`, `SYMLINK_NOT_ALLOWED`, `MISSING_FILE`, `NOT_A_REGULAR_FILE`, `NOT_A_DIRECTORY`, `FILE_TOO_LARGE`, `UNREADABLE_FILE`, `INVALID_ENCODING`, `INVALID_TOML`, `INVALID_JSON`, `INVALID_JSON_ROOT`, `UNSUPPORTED_SCHEMA_VERSION`, `MISSING_PROPERTY`, `UNKNOWN_FORM_PROPERTY`, `INVALID_PROPERTY`, `INVALID_FORM_ID`, `INVALID_SLUG`, `INVALID_STATUS`, `FORM_ID_MISMATCH`, `DUPLICATE_FORM_ID`, `DUPLICATE_SLUG`, más los códigos de `elements.toml` listados en [`ELEMENTS_SCHEMA.md`](ELEMENTS_SCHEMA.md#diagnósticos-de-carga).
 
 ## Visibilidad
 

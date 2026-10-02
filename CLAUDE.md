@@ -407,13 +407,19 @@ Pipeline esperado:
 ```text
 Input
   ->
-Validación sintáctica
+Validación del tipo estructural de entrada
   ->
-Validación de tipo
+Canonicalización estructural obligatoria del tipo
   ->
-Restricciones locales
+Validación de caracteres estructuralmente permitidos
   ->
-Normalización explícita
+Normalización explícita configurada
+  ->
+Canonicalización Unicode final (NFC, solo text/text_long)
+  ->
+Ausencia/vacío y `required`
+  ->
+Restricciones locales sobre el VALOR CANÓNICO FINAL
   ->
 Rules Engine
   ->
@@ -421,6 +427,8 @@ Transacción
   ->
 PostgreSQL
 ```
+
+Las restricciones locales (longitud, rango...) nunca se evalúan antes de una transformación que pueda cambiar el valor: `case = "upper"` puede alargar un texto, así que `max_length` se comprueba después. El detalle exacto está en `ELEMENTS_SCHEMA.md`.
 
 No realices conversiones mágicas.
 
@@ -456,6 +464,8 @@ case = "upper"
 No inventes normalizaciones globales agresivas.
 
 No uses fuzzy matching para transformar silenciosamente valores.
+
+La canonicalización estructural de cada tipo (NFC en `text`/`text_long`, CRLF/CR -> LF en `text_long`, `HH:MM` -> `HH:MM:SS`, datetime -> UTC, decimal con sus `decimal_places`) forma parte del contrato del tipo, no es configurable y está documentada en `ELEMENTS_SCHEMA.md`.
 
 ---
 

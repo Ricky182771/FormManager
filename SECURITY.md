@@ -1,6 +1,6 @@
-# Seguridad (Hito 1)
+# Seguridad (Hito 2)
 
-Alcance: la fundación del Core y la carga de paquetes de formulario desde `FORMS_DIR`. Todavía no hay submissions, resources, rules ni JS Runner, así que sus riesgos no se tratan aquí.
+Alcance: la fundación del Core, la carga de paquetes de formulario desde `FORMS_DIR` y el schema de `elements.toml` con su validador local de respuestas. Todavía no hay submissions, resources, rules ni JS Runner, así que sus riesgos no se tratan aquí.
 
 ## Modelo de amenazas
 
@@ -93,6 +93,15 @@ Las redes `backend` y `proxy` son `internal: true`: la app no tiene salida a Int
 - Un paquete inválido no afecta a los demás ni impide arrancar. Los diagnósticos llevan ruta relativa, archivo, código y mensaje fijo: sin rutas absolutas, contenido ni trazas. Solo van al log; la API no los expone.
 - Los IDs se generan con `secrets` (96 bits). No son secretos ni autenticación.
 - El creador interno escribe en `.tmp-<random>/<id>/` con `O_CREAT|O_EXCL`, valida con el mismo loader y hace `renameat` atómico; nunca sobrescribe un paquete existente y limpia ante fallo. No tiene endpoint.
+
+### `elements.toml` y validación de respuestas
+
+- Parser manual con lista blanca de propiedades por tipo: propiedades desconocidas, no aplicables, tipos desconocidos e IDs duplicados invalidan el paquete. Los IDs de elemento y los `value` de opciones son ASCII con regex cerrada (sin puntos, barras, espacios ni Unicode confundible).
+- **Sin regex del autor**: `pattern` está diferido porque `re` no protege contra ReDoS. Las regex internas (email, URL, fechas, decimal) son de tiempo lineal y se compilan una vez; hay tests con entradas adversarias.
+- Respuestas: tipos JSON estrictos (`bool` nunca pasa por `int`, `null` nunca es ausencia, decimales solo como string), sin conversiones mágicas. Se rechazan caracteres de control, C1 y surrogates sueltos (no llegarán a PostgreSQL). Límites duros de longitud (texto 1000/10 000, email 254, URL 2048) y como máximo 20 errores por validación.
+- Los errores llevan código, `element_id` y un mensaje fijo: **nunca** el valor recibido, el label ni secretos. Una clave desconocida solo se repite si tiene forma de ID seguro.
+- La validación de `url` **no es una defensa SSRF**: el Core no visita URLs. Una feature futura que haga peticiones salientes necesitará su propia política.
+- El validador es puro: sin I/O, sin base de datos, sin logs de respuestas.
 
 ### API de formularios
 
