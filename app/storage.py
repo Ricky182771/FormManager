@@ -1,4 +1,4 @@
-"""FORMS_DIR preparation. Hito 0 only guarantees the directory is usable; it never reads it."""
+"""FORMS_DIR preparation: the directory must be usable before the Form Loader scans it."""
 
 from __future__ import annotations
 
@@ -24,7 +24,3 @@ def prepare_forms_dir(path: Path) -> Path:
     if not os.access(path, os.R_OK | os.W_OK | os.X_OK):
         raise StorageError("FORMS_DIR is not readable and writable by the application user")
     return path.resolve()
-
-
-# There is no Form Loader yet (Hito 1), so nothing in FORMS_DIR is ever loaded.
-FORMS_LOADED = 0

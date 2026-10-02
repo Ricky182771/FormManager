@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from starlette.responses import HTMLResponse
 
 from app.config import Settings
+from app.forms.catalog import FormCatalog
 from app.security.rate_limit import SlidingWindowRateLimiter
 from app.security.sessions import AdminSessionManager, LoginCsrfCodec
 
@@ -33,6 +34,7 @@ class Services:
     admin_sessions: AdminSessionManager
     templates: Environment
     forms_dir: Path
+    catalog: FormCatalog
 
 
 def build_templates(tz: ZoneInfo) -> Environment:

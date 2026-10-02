@@ -47,8 +47,9 @@ def alembic_config(url: URL) -> Config:
     return cfg
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def forms_root(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    # Per test: the catalog scans this directory, so packages must not leak between tests.
     return tmp_path_factory.mktemp("forms")
 
 
@@ -96,7 +97,9 @@ def clean_db(request: pytest.FixtureRequest) -> Iterator[None]:
     eng: Engine = request.getfixturevalue("engine")
     with eng.begin() as conn:
         conn.execute(text("SET LOCAL lock_timeout = '5s'"))
-        conn.execute(text("TRUNCATE admin_sessions, admin_audit_log RESTART IDENTITY"))
+        conn.execute(
+            text("TRUNCATE admin_sessions, admin_audit_log, forms_registry RESTART IDENTITY")
+        )
     yield
 
 
@@ -119,8 +122,10 @@ def app(engine: Engine, settings_factory: Callable[..., Settings]) -> FastAPI:
 
 
 @pytest.fixture
-def client(app: FastAPI) -> TestClient:
-    return TestClient(app)
+def client(app: FastAPI) -> Iterator[TestClient]:
+    # Context manager runs the lifespan: catalog load + registry sync, as in production.
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 @pytest.fixture

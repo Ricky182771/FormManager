@@ -51,6 +51,7 @@ services:
       ADMIN_LOGIN_RATE_LIMIT: ${ADMIN_LOGIN_RATE_LIMIT:-5/15minutes}
       SESSION_MAX_AGE_SECONDS: ${SESSION_MAX_AGE_SECONDS:-14400}
       MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES:-16384}
+      FORM_DEFINITION_MAX_BYTES: ${FORM_DEFINITION_MAX_BYTES:-1048576}
       DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-15000}
       DB_LOCK_TIMEOUT_MS: ${DB_LOCK_TIMEOUT_MS:-10000}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -64,7 +65,7 @@ services:
     tmpfs:
       - /tmp:size=16m,mode=1777
     volumes:
-      # The only writable path besides /tmp. Not read by the app until the Form Loader exists.
+      # The only writable path besides /tmp: form packages, scanned at startup.
       - forms_data:/data/forms
     cap_drop:
       - ALL

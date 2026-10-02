@@ -1,6 +1,7 @@
 """HTTP smoke test through the public entrypoint (stdlib only).
 
-Checks /health, /, security headers, admin login, dashboard and logout.
+Checks /health, /, security headers, the forms API, admin login, dashboard and logout.
+With SMOKE_FORM_SLUG/SMOKE_FORM_ID set, also checks that synthetic form is loaded and served.
 """
 
 from __future__ import annotations
@@ -69,13 +70,53 @@ status, hdr, body = call("GET", "/")
 check("/ -> 200", status == 200, str(status))
 check("/ reports core running", "En ejecución" in body)
 check("/ reports database healthy", "Saludable" in body)
-check(
-    "/ reports 0 forms loaded", re.search(r"Formularios cargados</dt>\s*<dd>0<", body) is not None
-)
+loaded = re.search(r"Formularios cargados</dt>\s*<dd>(\d+)<", body)
+check("/ reports forms loaded", loaded is not None)
 check("CSP header", "frame-ancestors 'none'" in hdr.get("content-security-policy", ""))
 check("nosniff header", hdr.get("x-content-type-options") == "nosniff")
 check("no Server header", "server" not in hdr, hdr.get("server", ""))
 check("no CORS header", "access-control-allow-origin" not in hdr)
+
+status, hdr, body = call("GET", "/api/v1/forms")
+forms = json.loads(body).get("forms", []) if status == 200 else []
+check(
+    "/api/v1/forms -> 200 JSON",
+    status == 200 and hdr.get("content-type", "").startswith("application/json"),
+)
+check(
+    "/ count matches /api/v1/forms",
+    loaded is not None and int(loaded.group(1)) == len(forms),
+    f"{loaded.group(1) if loaded else '?'} vs {len(forms)}",
+)
+check(
+    "/api/v1/forms sorted by slug", [f["slug"] for f in forms] == sorted(f["slug"] for f in forms)
+)
+check("/api/v1/forms discloses no paths", "/data/forms" not in body and "_path" not in body)
+
+slug = os.environ.get("SMOKE_FORM_SLUG")
+if slug:
+    form_id = os.environ.get("SMOKE_FORM_ID", "")
+    check("/ reports >= 1 form loaded", loaded is not None and int(loaded.group(1)) >= 1)
+    check("synthetic form listed", any(f["slug"] == slug and f["id"] == form_id for f in forms))
+    status, _, body = call("GET", "/api/v1/forms/" + slug)
+    detail = json.loads(body) if status == 200 else {}
+    check(
+        "form metadata by slug -> 200",
+        status == 200
+        and detail.get("title") == "Reserva de sala"
+        and detail.get("status") == "draft",
+        f"{status} {body[:200]}",
+    )
+    check("form metadata discloses no paths", "/data/forms" not in body and "_path" not in body)
+
+status, _, body = call("GET", "/api/v1/forms/smoke-missing-form")
+check(
+    "missing form -> 404 FORM_NOT_FOUND",
+    status == 404 and json.loads(body)["error"]["code"] == "FORM_NOT_FOUND",
+    f"{status} {body[:200]}",
+)
+status, _, _ = call("POST", "/api/v1/forms", {"slug": "x"})
+check("no form creation endpoint", status in (403, 405), str(status))
 
 status, _, body = call("GET", "/admin/login")
 check("admin login page -> 200", status == 200, str(status))
@@ -91,6 +132,11 @@ status, _, _ = call(
 check("admin login -> 303", status == 303, str(status))
 status, _, body = call("GET", "/admin")
 check("admin dashboard -> 200", status == 200 and "FormManager Admin" in body, str(status))
+admin_loaded = re.search(r"Formularios cargados</dt>\s*<dd>(\d+)<", body)
+check(
+    "admin shows same forms count",
+    admin_loaded is not None and loaded is not None and admin_loaded.group(1) == loaded.group(1),
+)
 status, _, _ = call("POST", "/admin/logout", {"csrf_token": csrf_field(body)})
 check("admin logout -> 303", status == 303, str(status))
 status, _, _ = call("GET", "/admin")

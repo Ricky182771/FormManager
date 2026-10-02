@@ -3,13 +3,16 @@ from __future__ import annotations
 import io
 import logging
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine
 
+from app.config import Settings
 from app.logging_setup import JsonFormatter
+from app.main import create_app
 from tests.conftest import ADMIN_PASSWORD, admin_csrf, admin_login, password_hash
 
 
@@ -41,11 +44,14 @@ def test_static_css_is_served_and_cacheable(client: TestClient) -> None:
     assert res.headers.get("cache-control") != "no-store"
 
 
-def test_forms_dir_is_not_interpreted(client: TestClient, forms_root: Path) -> None:
+def test_incomplete_package_is_not_loaded_or_rendered(
+    engine: Engine, settings_factory: Callable[..., Settings], forms_root: Path
+) -> None:
     package = forms_root / "K8mP4qT2xN7rV5sA"
-    package.mkdir(exist_ok=True)
+    package.mkdir()
     (package / "form.toml").write_text('title = "ALICE EXAMPLE form"\n')
-    res = client.get("/")
+    with TestClient(create_app(settings_factory())) as client:
+        res = client.get("/")
     assert "ALICE EXAMPLE" not in res.text
     assert re.search(r"Formularios cargados</dt>\s*<dd>0<", res.text)
 

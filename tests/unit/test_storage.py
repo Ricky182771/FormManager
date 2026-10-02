@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.storage import FORMS_LOADED, StorageError, prepare_forms_dir
+from app.storage import StorageError, prepare_forms_dir
 
 
 def test_creates_missing_forms_dir(tmp_path: Path) -> None:
@@ -45,11 +45,11 @@ def test_rejects_read_only_dir(tmp_path: Path) -> None:
         target.chmod(0o700)
 
 
-def test_forms_dir_contents_are_never_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_prepare_does_not_read_contents(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "form.toml").write_text("this must not be parsed")
 
     def forbidden(*args: object, **kwargs: object) -> None:
-        raise AssertionError("FORMS_DIR must not be scanned in Hito 0")
+        raise AssertionError("prepare_forms_dir must not scan; the Form Loader does")
 
     monkeypatch.setattr(os, "listdir", forbidden)
     monkeypatch.setattr(os, "scandir", forbidden)
@@ -58,4 +58,3 @@ def test_forms_dir_contents_are_never_read(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setattr(Path, "rglob", forbidden)
     monkeypatch.setattr(Path, "read_text", forbidden)
     prepare_forms_dir(tmp_path)
-    assert FORMS_LOADED == 0

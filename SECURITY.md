@@ -1,6 +1,6 @@
-# Seguridad (Hito 0)
+# Seguridad (Hito 1)
 
-Alcance: la fundación del Core. Todavía no hay formularios, submissions, resources ni JS Runner, así que sus riesgos no se tratan aquí.
+Alcance: la fundación del Core y la carga de paquetes de formulario desde `FORMS_DIR`. Todavía no hay submissions, resources, rules ni JS Runner, así que sus riesgos no se tratan aquí.
 
 ## Modelo de amenazas
 
@@ -10,6 +10,7 @@ Alcance: la fundación del Core. Todavía no hay formularios, submissions, resou
 | Atacante cross-site | Hace que el navegador de un admin con sesión envíe peticiones. |
 | Atacante de fuerza bruta | Muchos intentos de login desde una o varias IPs. |
 | Contenedor app comprometido | Ejecuta código como el usuario de la app. |
+| Autor de un paquete de formulario | Coloca archivos arbitrarios en `FORMS_DIR` (symlinks, archivos enormes, FIFOs, TOML/JSON hostil, IDs o slugs duplicados). Los paquetes se tratan como configuración **no confiable**. |
 
 Fuera de alcance: compromiso del host, del daemon Docker o del administrador.
 
@@ -78,6 +79,28 @@ Fuera de alcance: compromiso del host, del daemon Docker o del administrador.
 
 Las redes `backend` y `proxy` son `internal: true`: la app no tiene salida a Internet.
 
+### Paquetes de formulario (`FORMS_DIR`)
+
+- Todo acceso pasa por `app/forms/fsutil.py`: cada nombre se resuelve contra un fd de directorio abierto (`openat`) con `O_NOFOLLOW`. Un nombre no puede salir del directorio donde se encontró; no hay rutas construidas con texto del paquete. Requiere Linux/POSIX (plataforma soportada del runtime v1).
+- `FORMS_DIR` se abre con `O_DIRECTORY|O_NOFOLLOW`. Solo se recorren sus hijos directos; las entradas con `.` inicial (incluido `.tmp-*`) se ignoran.
+- Symlinks rechazados en toda la frontera del paquete: directorio, los cuatro archivos de definición y `resources/`, `assets/`, `ui/`.
+- Los archivos de definición deben ser regulares. Se comprueba con `lstat` antes de abrir (un FIFO o dispositivo nunca se abre) y con `fstat` tras abrir (mismo inode; detecta un intercambio entre ambas llamadas). `O_NONBLOCK` evita bloquearse si aun así aparece un FIFO.
+- Límite `FORM_DEFINITION_MAX_BYTES` (1 MiB por defecto) por archivo: se comprueba el tamaño declarado antes de leer y la lectura se corta en límite+1 bytes, antes de parsear.
+- El ID se valida con `^[A-Za-z0-9_-]{16}$` y debe coincidir con el nombre del directorio: un `id` como `../../etc` es inválido, nunca una ruta.
+- Parsers de la stdlib (`tomllib`, `json`). JSON rechaza claves duplicadas y `NaN`/`Infinity`; anidación excesiva (`RecursionError`) se convierte en diagnóstico. Texto de `form.toml` sin caracteres de control (un NUL nunca llega a PostgreSQL).
+- Esquema estricto: propiedades desconocidas son error.
+- Slugs o IDs duplicados invalidan a **todos** los participantes: un paquete nuevo no puede "secuestrar" el slug de otro siendo cargado antes.
+- Un paquete inválido no afecta a los demás ni impide arrancar. Los diagnósticos llevan ruta relativa, archivo, código y mensaje fijo: sin rutas absolutas, contenido ni trazas. Solo van al log; la API no los expone.
+- Los IDs se generan con `secrets` (96 bits). No son secretos ni autenticación.
+- El creador interno escribe en `.tmp-<random>/<id>/` con `O_CREAT|O_EXCL`, valida con el mismo loader y hace `renameat` atómico; nunca sobrescribe un paquete existente y limpia ante fallo. No tiene endpoint.
+
+### API de formularios
+
+- `GET /api/v1/forms` y `GET /api/v1/forms/{slug}` devuelven solo metadata (`id`, `slug`, `title`, `status`, `schema_version`, y en el detalle `subtitle`/`description` como texto). Nunca rutas del filesystem, contenido de elements/resources/rules ni diagnósticos.
+- El slug de la URL solo se usa como clave de un diccionario en memoria; no toca el filesystem.
+- No hay endpoint de creación, edición ni recarga.
+- Formularios en cualquier estado (incluido `draft`) aparecen en la lista. **No es la política pública final**: el hito de publicación/acceso decidirá qué estados son visibles.
+
 ### Secretos
 
 - Solo en `.env` (ignorado por git) o variables de entorno. `.env.example` no contiene valores.
@@ -86,12 +109,14 @@ Las redes `backend` y `proxy` son `internal: true`: la app no tiene salida a Int
 
 ## Verificación
 
-Cubierto por tests (`tests/`) y por `scripts/smoke_test.sh` contra el stack real: puertos publicados, uid, rootfs read-only, `FORMS_DIR` escribible, ausencia de `POSTGRES_PASSWORD`, cabeceras, HSTS y login/logout por Caddy.
+Cubierto por tests (`tests/`, incluidos `tests/unit/test_form_security.py` y los tests de registry contra PostgreSQL real) y por `scripts/smoke_test.sh` contra el stack real: puertos publicados, uid, rootfs read-only, `FORMS_DIR` escribible, ausencia de `POSTGRES_PASSWORD`, cabeceras, HSTS, login/logout por Caddy y un formulario sintético cargado y servido por la API.
 
 ## Limitaciones conocidas
 
 - Rate limiter in-memory: se reinicia con la app y no sirve con varios workers.
 - `/` y `/health` hacen un ping a la DB por petición; no tienen rate limit propio (Caddy no limita por tasa).
-- Backup cubre solo PostgreSQL; `FORMS_DIR` no (sin contenido en el Hito 0).
+- `scripts/backup.sh` cubre solo PostgreSQL. `FORMS_DIR` ya contiene las definiciones y debe respaldarse aparte (ver README).
+- `GET /api/v1/forms` no tiene rate limit propio; sirve memoria, sin DB ni filesystem.
+- La unicidad de slug en el creador interno no es segura ante creaciones concurrentes (no hay endpoint que las permita).
 - El rol de app es dueño del esquema, así que puede alterar tablas (necesario para que ejecute las migraciones al arrancar).
 - La imagen de Caddy corre como root dentro del contenedor (con capacidades mínimas), igual que en el prototipo.

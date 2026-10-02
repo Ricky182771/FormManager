@@ -10,7 +10,7 @@ from app.config import Settings
 from app.db.session import build_engine, build_session_factory, ping
 from tests.conftest import TEST_DATABASE_URL, alembic_config
 
-EXPECTED_TABLES = {"admin_sessions", "admin_audit_log", "alembic_version"}
+EXPECTED_TABLES = {"admin_sessions", "admin_audit_log", "forms_registry", "alembic_version"}
 
 
 def test_real_postgres_connection_and_ping(settings_factory: Callable[..., Settings]) -> None:
@@ -37,10 +37,10 @@ def test_engine_session_settings(settings_factory: Callable[..., Settings], engi
         app_engine.dispose()
 
 
-def test_migration_0001_creates_only_generic_tables(engine: Engine) -> None:
+def test_head_creates_only_generic_tables(engine: Engine) -> None:
     assert set(inspect(engine).get_table_names()) == EXPECTED_TABLES
     with engine.connect() as conn:
-        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0001"
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0002"
 
 
 def test_migration_0001_downgrade_and_upgrade(engine: Engine) -> None:
@@ -55,6 +55,7 @@ def test_constraint_names_follow_convention(engine: Engine) -> None:
     insp = inspect(engine)
     assert insp.get_pk_constraint("admin_sessions")["name"] == "pk_admin_sessions"
     assert insp.get_pk_constraint("admin_audit_log")["name"] == "pk_admin_audit_log"
+    assert insp.get_pk_constraint("forms_registry")["name"] == "pk_forms_registry"
 
 
 def test_application_role_is_least_privilege(engine: Engine) -> None:

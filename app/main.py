@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from functools import partial
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -13,6 +14,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import Settings, get_settings
 from app.db.session import build_engine, build_session_factory, ping
+from app.forms.catalog import FormCatalog
+from app.forms.registry import sync_registry
 from app.logging_setup import configure_logging
 from app.middleware import (
     BodySizeLimitMiddleware,
@@ -20,7 +23,7 @@ from app.middleware import (
     SecurityHeadersMiddleware,
     error_body,
 )
-from app.routes import admin, health, public
+from app.routes import admin, api, health, public
 from app.security.rate_limit import SlidingWindowRateLimiter
 from app.security.sessions import AdminSessionManager, LoginCsrfCodec
 from app.storage import prepare_forms_dir
@@ -46,28 +49,37 @@ ERRORS: dict[int, tuple[str, str]] = {
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
-    # Fails startup if FORMS_DIR is unusable; its contents are never read in Hito 0.
+    # Fails startup if FORMS_DIR is unusable; packages are loaded in the lifespan below.
     forms_dir = prepare_forms_dir(settings.forms_dir)
     engine = build_engine(settings)
+    session_factory = build_session_factory(engine)
     svc = Services(
         settings=settings,
         engine=engine,
-        session_factory=build_session_factory(engine),
+        session_factory=session_factory,
         limiter=SlidingWindowRateLimiter(),
         login_csrf=LoginCsrfCodec(settings),
         admin_sessions=AdminSessionManager(settings),
         templates=build_templates(settings.tz),
         forms_dir=forms_dir,
+        catalog=FormCatalog(
+            forms_dir,
+            settings.form_definition_max_bytes,
+            partial(sync_registry, session_factory),
+        ),
     )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        # Invalid packages are only diagnostics; a registry sync failure aborts startup.
+        svc.catalog.reload()
         logger.info(
             "startup",
             extra={
                 "env": settings.app_env,
                 "admin_enabled": settings.admin_enabled,
                 "db_reachable": ping(engine),
+                "forms_valid": svc.catalog.count,
             },
         )
         yield
@@ -92,6 +104,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(public.router)
     app.include_router(admin.router)
+    app.include_router(api.router)
 
     _register_error_handlers(app)
     return app

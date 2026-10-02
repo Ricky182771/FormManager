@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     admin_login_rate_limit: str = "5/15minutes"
     session_max_age_seconds: int = Field(default=4 * 3600, ge=300, le=24 * 3600)
     max_request_body_bytes: int = Field(default=16 * 1024, ge=1024, le=1024 * 1024)
+    # Per definition file (form.toml, elements.toml, resources.toml, rules.json).
+    form_definition_max_bytes: int = Field(default=1024 * 1024, ge=1024, le=16 * 1024 * 1024)
 
     log_level: str = "INFO"
 

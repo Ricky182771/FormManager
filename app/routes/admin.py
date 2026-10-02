@@ -14,7 +14,6 @@ from app.security.passwords import verify_secret
 from app.security.rate_limit import client_ip
 from app.security.sessions import AdminIdentity
 from app.services.audit import AuditAction, record_audit
-from app.storage import FORMS_LOADED
 from app.web import get_db, render, services
 
 router = APIRouter(prefix="/admin")
@@ -150,6 +149,6 @@ def dashboard(request: Request, identity: PageAdmin) -> Response:
             "admin": identity,
             "csrf": identity.csrf,
             "db_ok": ping(services(request).engine),
-            "forms_loaded": FORMS_LOADED,
+            "forms_loaded": services(request).catalog.count,
         },
     )
